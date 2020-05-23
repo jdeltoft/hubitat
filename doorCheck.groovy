@@ -14,12 +14,16 @@ preferences {
 def mainPage() {
 	dynamicPage(name: "mainPage", title: " ", install: true, uninstall: true) {
 		section {
-			input "thisName", "text", title: "Name this Door Check", submitOnChange: true
+			input "thisName", "text", title: "Name this Open Door Alert", submitOnChange: true
 			if(thisName) app.updateLabel("$thisName")
             input "contactSensors", "capability.contactSensor", title: "Select Contact Sensors", submitOnChange: true, required: true, multiple: true
-			input "minutesToAlert", "number", title: "Number of Minutes Left Open to Notify:", defaultValue: 15, submitOnChange: true
-			input "repeat", "boolean", title: "repeat:", defaultValue: false, submitOnChange: true
-			if(contactSensors) paragraph "Current state of doors: ${areAnyOpen()}"
+            input "alertMessage", "text", title: "Alert Message", defaultValue: "Open Door Alert!", required: true 
+			input "minutesToAlert", "number", title: "Initial Alert Delay (minutes):", defaultValue: 15, submitOnChange: true
+			input "repeat", "bool", title: "repeat:", defaultValue: false, submitOnChange: true
+            if (repeat) {
+			    input "minutesToRepeat", "number", title: "Repeat Alerts Time (minutes):", defaultValue: 30, submitOnChange: true
+            }
+			if(contactSensors) paragraph "Any Doors Currently Open: ${areAnyOpen()}"
 		}
         section("Notifications") {
             input "sendPushMessage", "capability.notification", title: "Send a push notification?", multiple: true, required: false
@@ -39,8 +43,8 @@ def updated() {
 
 def initialize() {
     state.timerRunning = false
-	def anyOpenDev = getChildDevice("DoorCheck_${app.id}")
-	if(!anyOpenDev) anyOpenDev = addChildDevice("hubitat", "Virtual Contact Sensor", "DoorCheck_${app.id}", null, [label: thisName, name: thisName])
+	def anyOpenDev = getChildDevice("OpenDoorAlert_${app.id}")
+	if(!anyOpenDev) anyOpenDev = addChildDevice("hubitat", "Virtual Contact Sensor", "OpenDoorAlert_${app.id}", null, [label: thisName, name: thisName])
 
     handleDoorEvent()  // need to check for doors open at start up also
 
@@ -56,19 +60,19 @@ def areAnyOpen() {
 }
 
 def handler(evt) {
-    log.debug "Door Check: event $evt.device $evt.value"
+    log.debug "ODA: event $evt.device $evt.value"
     handleDoorEvent()
 }
 
 def handleDoorEvent() {
-	def anyOpenDev = getChildDevice("DoorCheck_${app.id}")
+	def anyOpenDev = getChildDevice("OpenDoorAlert_${app.id}")
     if(areAnyOpen() == true) {
         // show that at least one of the doors is open in the virtual device
         anyOpenDev.open()
 
         // if any doors open start a timer for minutesToAlert unless already running
         if (!state.timerRunning) {
-            log.debug "Door Check: new timer for $minutesToAlert"
+            log.debug "ODA: new timer for $minutesToAlert"
             state.timerRunning = true
             runIn(60*minutesToAlert, doorAlarm)
         }
@@ -85,15 +89,22 @@ def doorAlarm() {
     if (state.timerRunning) {
         state.timerRunning = false
         if (sendPushMessage != null) {
-            log.debug "Door Check: send push msg..."
+            //log.debug "ODA: send push msg..."
+            send(alertMessage)
         }
 
         if (repeat) {
-            log.debug "Door Check: repeat new timer for $minutesToAlert"
+            log.debug "ODA: repeat new timer for $minutesToAlert"
             state.timerRunning = true
             runIn(60*minutesToAlert, doorAlarm)
         }
     }
 }
 
+private send(message) {
+    if (sendPushMessage != null) {
+        log.debug("ODA: Send Notification: $message")
+        sendPushMessage.deviceNotification(message)
+    } 
+}
 
