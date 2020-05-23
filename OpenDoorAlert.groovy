@@ -96,7 +96,7 @@ def doorAlarm() {
         if (repeat) {
             log.debug "ODA: repeat new timer for $minutesToAlert"
             state.timerRunning = true
-            runIn(60*minutesToAlert, doorAlarm)
+            runIn(60*minutesToRepeat, doorAlarm)
         }
     }
 }
