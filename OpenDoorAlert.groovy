@@ -11,10 +11,18 @@ preferences {
 	page(name: "mainPage")
 }
 
+
+// TODO:
+// - add something to "snooze" the alarm until next sensor change
+// - add ability to set restrictions on when the app runs (dates, times, etc)
+// - test with multiple pushes, wasn't sure if that needed to change to a loop for notifications
+// - find a way to clean up the virtual device if uninstalled
+
+
 def mainPage() {
 	dynamicPage(name: "mainPage", title: " ", install: true, uninstall: true) {
 		section {
-			input "thisName", "text", title: "Name this Open Door Alert", submitOnChange: true, required: true
+			input "thisName", "text", title: "Name this Open Door Alert", submitOnChange: true, defaultValue: "Open Door Alert (NameMe)"
 			if(thisName) app.updateLabel("$thisName")
             input "contactSensors", "capability.contactSensor", title: "Select Contact Sensors", submitOnChange: true, required: true, multiple: true
             input "alertMessage", "text", title: "Alert Message", defaultValue: "Open Door Alert!", required: true 
@@ -24,6 +32,7 @@ def mainPage() {
 			    input "minutesToRepeat", "number", title: "Repeat Alerts Time (minutes):", defaultValue: 30, submitOnChange: true
             }
 			if(contactSensors) paragraph "Any Doors Currently Open: ${areAnyOpen()}"
+			input "debugLog", "bool", title: "Enable Debug Logging:", defaultValue: false, submitOnChange: true
 		}
         section("Notifications") {
             input "sendPushMessage", "capability.notification", title: "Send a push notification?", multiple: true, required: false
@@ -39,6 +48,11 @@ def installed() {
 def updated() {
 	unsubscribe()
 	initialize()
+}
+
+def uninstalled() {
+	unsubscribe()
+	deleteChildDevice("OpenDoorAlert_${app.id}")
 }
 
 def initialize() {
@@ -60,7 +74,7 @@ def areAnyOpen() {
 }
 
 def handler(evt) {
-    log.debug "ODA: event $evt.device $evt.value"
+    if (debugLog) log.debug "ODA: event $evt.device $evt.value"
     handleDoorEvent()
 }
 
@@ -72,9 +86,9 @@ def handleDoorEvent() {
 
         // if any doors open start a timer for minutesToAlert unless already running
         if (!state.timerRunning) {
-            log.debug "ODA: new timer for $minutesToAlert"
+            if (debugLog) log.debug "ODA: new timer for $minutesToAlert"
             state.timerRunning = true
-            runIn(60*minutesToAlert, doorAlarm)
+            runIn(60*minutesToAlert, doorAlarm)  // this will replace any (stale) timer already running
         }
     } else { 
         // show that no doors are open in the virtual device
@@ -88,13 +102,10 @@ def handleDoorEvent() {
 def doorAlarm() {
     if (state.timerRunning) {
         state.timerRunning = false
-        if (sendPushMessage != null) {
-            //log.debug "ODA: send push msg..."
-            send(alertMessage)
-        }
+        send(alertMessage)
 
         if (repeat) {
-            log.debug "ODA: repeat new timer for $minutesToAlert"
+            if (debugLog) log.debug "ODA: repeat new timer for $minutesToRepeat"
             state.timerRunning = true
             runIn(60*minutesToRepeat, doorAlarm)
         }
@@ -103,7 +114,7 @@ def doorAlarm() {
 
 private send(message) {
     if (sendPushMessage != null) {
-        log.debug("ODA: Send Notification: $message")
+        if (debugLog) log.debug("ODA: Send Notification: $message")
         sendPushMessage.deviceNotification(message)
     } 
 }
