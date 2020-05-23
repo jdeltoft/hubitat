@@ -14,7 +14,7 @@ preferences {
 def mainPage() {
 	dynamicPage(name: "mainPage", title: " ", install: true, uninstall: true) {
 		section {
-			input "thisName", "text", title: "Name this Open Door Alert", submitOnChange: true
+			input "thisName", "text", title: "Name this Open Door Alert", submitOnChange: true, required: true
 			if(thisName) app.updateLabel("$thisName")
             input "contactSensors", "capability.contactSensor", title: "Select Contact Sensors", submitOnChange: true, required: true, multiple: true
             input "alertMessage", "text", title: "Alert Message", defaultValue: "Open Door Alert!", required: true 
