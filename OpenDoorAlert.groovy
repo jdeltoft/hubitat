@@ -20,8 +20,7 @@ preferences {
 
 
 def mainPage() {
-    def appVersion "0.10"
-	dynamicPage(name: "mainPage", title: "Open Door Alert (v$appVersion)", install: true, uninstall: true) {
+	dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.10)", install: true, uninstall: true) {
 		section {
 			input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Open Door Alert (NameMe)"
 			if(thisName) app.updateLabel("$thisName")
