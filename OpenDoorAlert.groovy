@@ -20,22 +20,29 @@ preferences {
 
 
 def mainPage() {
-	dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.10)", install: true, uninstall: true) {
+	dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.11)", install: true, uninstall: true) {
 		section {
 			input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Open Door Alert (NameMe)"
 			if(thisName) app.updateLabel("$thisName")
             input "contactSensors", "capability.contactSensor", title: "Select Contact Sensors", submitOnChange: true, required: true, multiple: true
             input "alertMessage", "text", title: "Alert Message", defaultValue: "Open Door Alert!", required: true 
-			input "minutesToAlert", "number", title: "Initial Alert Delay (minutes):", defaultValue: 15, submitOnChange: true
+			input "minutesToAlertDay", "number", title: "Initial Day Alert Delay (minutes):", defaultValue: 15, submitOnChange: true
+			input "minutesToAlertNight", "number", title: "Initial Night Alert Delay (minutes):", defaultValue: 5, submitOnChange: true
 			input "repeat", "bool", title: "repeat:", defaultValue: false, submitOnChange: true
             if (repeat) {
 			    input "minutesToRepeat", "number", title: "Repeat Alerts Time (minutes):", defaultValue: 30, submitOnChange: true
             }
 			if(contactSensors) paragraph "Any Doors Currently Open: ${areAnyOpen()}"
-			input "debugLog", "bool", title: "Enable Debug Logging:", defaultValue: false, submitOnChange: true
 		}
         section("Notifications") {
             input "sendPushMessage", "capability.notification", title: "Send a push notification?", multiple: true, required: false
+        }
+        section("Day to Night") {
+			//input "sunsetOffset", "number", title: "Sunset Offset (minutes +/-):", defaultValue: 0, submitOnChange: true
+            input "sunsetOffset", "text", title: "Sunset Offset (+/-) HH:MM", required: false
+        }
+        section("Debug") {
+			input "debugLog", "bool", title: "Enable Debug Logging:", defaultValue: false, submitOnChange: true
         }
 
 	}
@@ -84,11 +91,23 @@ def handleDoorEvent() {
         // show that at least one of the doors is open in the virtual device
         anyOpenDev.open()
 
-        // if any doors open start a timer for minutesToAlert unless already running
+        // if any doors open start a timer for minutesToAlertDay unless already running
         if (!state.timerRunning) {
-            if (debugLog) log.debug "ODA: new timer for $minutesToAlert"
+            def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
+            Date latestdate = new Date();
+
+            def min = minutesToAlertDay
+
+            if (latestdate.after(astroInfo.sunset)) {
+                if (debugLog) log.debug "ODA: using night alert"
+                min = minutesToAlertNight
+            } else {
+                if (debugLog) log.debug "ODA: using day alert"
+            }
+
+            if (debugLog) log.debug "ODA: new timer for $min"
             state.timerRunning = true
-            runIn(60*minutesToAlert, doorAlarm)  // this will replace any (stale) timer already running
+            runIn(60*minutesToAlertDay, doorAlarm)  // this will replace any (stale) timer already running
         }
     } else { 
         // show that no doors are open in the virtual device
