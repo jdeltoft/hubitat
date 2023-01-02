@@ -93,14 +93,14 @@ def handlerTemp(evt) {
 }
 
 def snoozeUpdate() {
-  if (snoozeCount.currentTemperature.toInteger() > 5) {
+  if (snoozeCount.currentTemperature > 5) {
     state.snoozeRunning = true
-    runIn(60 * 5, snoozeUpdate)
-    snoozeCount.setTemperature(snoozeCount.currentTemperature - 5)
-  } else if (snoozeCount.currentTemperature.toInteger() > 0) {
+    runIn(60*5, snoozeUpdate)
+    snoozeCount.currentTemperature -= 5
+  } else if (snoozeCount.currentTemperature > 0) {
     state.snoozeRunning = true
-    runIn(60 * snoozeCount.currentTemperature.toInteger(), snoozeUpdate)
-    snoozeCount.setTemperature(0)
+    runIn(60*snoozeCount.currentTemperature, snoozeUpdate)
+    snoozeCount.currentTemperature = 0
   } else {
     state.snoozeRunning = false
   }
@@ -160,5 +160,4 @@ private send(message) {
     } 
   } 
 }
-
 
