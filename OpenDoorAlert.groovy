@@ -19,7 +19,7 @@ preferences {
 
 
 def mainPage() {
-  dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.13)", install: true, uninstall: true) {
+  dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.14)", install: true, uninstall: true) {
     section {
       input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Open Door Alert (NameMe)"
       if(thisName) app.updateLabel("$thisName")
@@ -64,8 +64,9 @@ def uninstalled() {
 }
 
 def initialize() {
-  state.timerRunning = false
-  state.snoozeRunning = false
+  state.doorAlarmTime = 0
+  state.snoozeMinutes = 0
+
   def anyOpenDev = getChildDevice("OpenDoorAlert_${app.id}")
   if(!anyOpenDev) anyOpenDev = addChildDevice("hubitat", "Virtual Contact Sensor", "OpenDoorAlert_${app.id}", null, [label: thisName, name: thisName])
 
@@ -91,30 +92,48 @@ def handlerContact(evt) {
 
 def handlerTemp(evt) {
   if (debugLog) log.debug "ODA: temp event $evt.device $evt.value"
-  snoozeUpdate()
+  timerHandler()
 }
 
-def snoozeUpdate() {
-  if (!state.snoozeRunning) {
-    if (debugLog) log.debug "ODA: snooze update ${snoozeCount.currentTemperature.toInteger()}"
-    if (snoozeCount.currentTemperature.toInteger() > 5) {
-      state.snoozeRunning = true
-      runIn(60 * 5, snoozeTimeout)
-      snoozeCount.setTemperature(snoozeCount.currentTemperature - 5)
-    } else if (snoozeCount.currentTemperature.toInteger() > 0) {
-      state.snoozeRunning = true
-      runIn(60 * snoozeCount.currentTemperature.toInteger(), snoozeTimeout)
-      snoozeCount.setTemperature(0)
-    } else {
-      state.snoozeRunning = false
-    }
+def timerHandler() {
+  if (debugLog) log.debug "ODA: timer handler"
+
+  if (state.doorAlarmTime == null) state.doorAlarmTime = 0
+  if (state.snoozeMinutes == null) state.snoozeMinutes = 0
+
+  // Check if door alarm timer is active
+  if (state.doorAlarmTime > 0 && (state.doorAlarmTime < now())) {
+    state.doorAlarmTime = 0
+    doorAlarm()
   }
-}
 
-def snoozeTimeout() {
-  if (debugLog) log.debug "ODA: snooze timeout ${snoozeCount.currentTemperature.toInteger()}"
-  state.snoozeRunning = false
-  snoozeUpdate()
+  if (state.snoozeMinutes <= 0) {
+    if (snoozeCount.currentTemperature.toInteger() > 0) {
+      state.snoozeMinutes = now() + 5 * 60 * 1000
+      //if (snoozeCount.currentTemperature.toInteger() >= 5) {
+        //snoozeCount.setTemperature(snoozeCount.currentTemperature - 5)
+      //} else {
+        //snoozeCount.setTemperature(0)
+      //}
+    }
+  } else {
+    if (state.snoozeMinutes < now()) {
+      state.snoozeMinutes = 0
+      if (snoozeCount.currentTemperature.toInteger() > 0) {
+        state.snoozeMinutes = now() + 5 * 60 * 1000
+        if (snoozeCount.currentTemperature.toInteger() >= 5) {
+          snoozeCount.setTemperature(snoozeCount.currentTemperature - 5)
+        } else {
+          snoozeCount.setTemperature(0)
+        }
+      }
+    }
+  } 
+
+  if ((state.snoozeMinutes > 0) || (state.doorAlarmTime > 0)) {
+    if (debugLog) log.debug "ODA: timer set timeout snooze:${snoozeCount.currentTemperature.toInteger()} doorAlarm:${state.doorAlarmTime}"
+    runIn(60 * 5, timerHandler)
+  }
 }
 
 def handleDoorEvent() {
@@ -124,7 +143,7 @@ def handleDoorEvent() {
     anyOpenDev.open()
 
     // if any doors open start a timer for minutesToAlertDay unless already running
-    if (!state.timerRunning) {
+    if (state.doorAlarmTime == 0) {
       def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
       Date latestdate = new Date();
 
@@ -138,28 +157,26 @@ def handleDoorEvent() {
       }
 
       if (debugLog) log.debug "ODA: new timer for $min"
-        state.timerRunning = true
-        runIn(60*minutesToAlertDay, doorAlarm)  // this will replace any (stale) timer already running
+        state.doorAlarmTime = now() + minutesToAlertDay * 60 * 1000
+        runIn(60 * 5, timerHandler)
       }
   } else { 
     // show that no doors are open in the virtual device
     anyOpenDev.close()
 
-    // if no doors open, save that the timer isn't needed  (is there way to kill the timer?)
-    state.timerRunning = false
+    // if no doors open, set to zero to indicate no timer
+    state.doorAlarmTime = 0
   }
-  snoozeUpdate()
 }
 
 def doorAlarm() {
-  if (state.timerRunning) {
-    state.timerRunning = false
+  if (state.doorAlarmTime > 0) {
+    state.doorAlarmTime = 0
     send(alertMessage)
 
     if (repeat) {
       if (debugLog) log.debug "ODA: repeat new timer for $minutesToRepeat"
-      state.timerRunning = true
-      runIn(60*minutesToRepeat, doorAlarm)
+      state.doorAlarmTime = now() + minutesToRepeat * 60 * 1000
     }
   }
 }
