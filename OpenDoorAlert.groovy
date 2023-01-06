@@ -91,12 +91,12 @@ def handlerContact(evt) {
 }
 
 def handlerTemp(evt) {
-  if (debugLog) log.debug "ODA: temp event $evt.device $evt.value"
-  timerHandler()
+  if (debugLog) log.debug "ODA: snooze (temp) event $evt.device $evt.value"
+  timerHandler(true)
 }
 
-def timerHandler() {
-  if (debugLog) log.debug "ODA: timer handler"
+def timerHandler(fromInput) {
+  //if (debugLog) log.debug "ODA: timer handler $fromInput"
 
   if (state.doorAlarmTime == null) state.doorAlarmTime = 0
   if (state.snoozeMinutes == null) state.snoozeMinutes = 0
@@ -109,29 +109,24 @@ def timerHandler() {
 
   if (state.snoozeMinutes <= 0) {
     if (snoozeCount.currentTemperature.toInteger() > 0) {
-      state.snoozeMinutes = now() + 5 * 60 * 1000
-      //if (snoozeCount.currentTemperature.toInteger() >= 5) {
-        //snoozeCount.setTemperature(snoozeCount.currentTemperature - 5)
-      //} else {
-        //snoozeCount.setTemperature(0)
-      //}
+      state.snoozeMinutes = now() + (5 * 60 * 1000)
     }
   } else {
-    if (state.snoozeMinutes < now()) {
+    if (snoozeCount.currentTemperature.toInteger() <= 0) {
       state.snoozeMinutes = 0
-      if (snoozeCount.currentTemperature.toInteger() > 0) {
-        state.snoozeMinutes = now() + 5 * 60 * 1000
+    } else if (state.snoozeMinutes < now() && fromInput != true) {
+        state.snoozeMinutes = now() + (5 * 60 * 1000)
         if (snoozeCount.currentTemperature.toInteger() >= 5) {
           snoozeCount.setTemperature(snoozeCount.currentTemperature - 5)
         } else {
           snoozeCount.setTemperature(0)
         }
-      }
     }
   } 
 
   if ((state.snoozeMinutes > 0) || (state.doorAlarmTime > 0)) {
     if (debugLog) log.debug "ODA: timer set timeout snooze:${snoozeCount.currentTemperature.toInteger()} doorAlarm:${state.doorAlarmTime}"
+    //runIn(60 * 5, timerHandler, [overwrite: true, data: [fromInput: false]])
     runIn(60 * 5, timerHandler)
   }
 }
@@ -157,9 +152,9 @@ def handleDoorEvent() {
       }
 
       if (debugLog) log.debug "ODA: new timer for $min"
-        state.doorAlarmTime = now() + minutesToAlertDay * 60 * 1000
-        runIn(60 * 5, timerHandler)
-      }
+      state.doorAlarmTime = now() + minutesToAlertDay * 60 * 1000
+      runIn(60 * 5, timerHandler)
+    }
   } else { 
     // show that no doors are open in the virtual device
     anyOpenDev.close()
@@ -187,7 +182,8 @@ private send(message) {
       if (debugLog) log.debug("ODA: Send Notification: $message")
       sendPushMessage.deviceNotification(message)
     } 
-  } 
+  } else {
+    if (debugLog) log.debug("ODA: Notification SKIPPED! $message")
+  }
 }
-
 
