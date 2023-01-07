@@ -19,12 +19,13 @@ preferences {
 
 
 def mainPage() {
-  dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.14)", install: true, uninstall: true) {
+  dynamicPage(name: "mainPage", title: "Open Door Alert (ver:0.15)", install: true, uninstall: true) {
     section {
       input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Open Door Alert (NameMe)"
       if(thisName) app.updateLabel("$thisName")
 
       input "contactSensors", "capability.contactSensor", title: "Select Contact Sensors", submitOnChange: true, required: true, multiple: true
+      input "alarmLights", "capability.switch", title: "Select Alarm Lights", submitOnChange: true, required: false, multiple: true
       input "snoozeCount", "capability.temperatureMeasurement", title: "Select Snooze Value", submitOnChange: true, required: false, multiple: false
       input "alertMessage", "text", title: "Alert Message", defaultValue: "Open Door Alert!", required: true 
       input "minutesToAlertDay", "number", title: "Initial Day Alert Delay (minutes):", defaultValue: 15, submitOnChange: true
@@ -71,7 +72,6 @@ def initialize() {
   if(!anyOpenDev) anyOpenDev = addChildDevice("hubitat", "Virtual Contact Sensor", "OpenDoorAlert_${app.id}", null, [label: thisName, name: thisName])
 
   handleDoorEvent()  // need to check for doors open at start up also
-  snoozeUpdate()
 
   subscribe(contactSensors, "contact", handlerContact)
   subscribe(snoozeCount, "temperature", handlerTemp)
@@ -103,7 +103,6 @@ def timerHandler(fromInput) {
 
   // Check if door alarm timer is active
   if (state.doorAlarmTime > 0 && (state.doorAlarmTime < now())) {
-    state.doorAlarmTime = 0
     doorAlarm()
   }
 
@@ -178,6 +177,10 @@ def doorAlarm() {
 
 private send(message) {
   if (!state.snoozeRunning) {
+    alarmLights.each {
+      it.on() 
+    }
+
     if (sendPushMessage != null) {
       if (debugLog) log.debug("ODA: Send Notification: $message")
       sendPushMessage.deviceNotification(message)
@@ -186,4 +189,3 @@ private send(message) {
     if (debugLog) log.debug("ODA: Notification SKIPPED! $message")
   }
 }
-
