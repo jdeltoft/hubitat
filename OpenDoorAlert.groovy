@@ -176,7 +176,9 @@ def doorAlarm() {
 }
 
 private send(message) {
-  if (!state.snoozeRunning) {
+  if (state.snoozeMinutes != null && state.snoozeMinutes > 0) {
+    if (debugLog) log.debug("ODA: Notification SKIPPED! $message")
+  } else {
     alarmLights.each {
       it.on() 
     }
@@ -185,7 +187,5 @@ private send(message) {
       if (debugLog) log.debug("ODA: Send Notification: $message")
       sendPushMessage.deviceNotification(message)
     } 
-  } else {
-    if (debugLog) log.debug("ODA: Notification SKIPPED! $message")
   }
 }
