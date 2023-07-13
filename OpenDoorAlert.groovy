@@ -169,7 +169,7 @@ def doorAlarm() {
     send(alertMessage)
 
     if (repeat) {
-      log.info("ODA: repeat new timer for $minutesToRepeat")
+      if (debugLog) log.debug "ODA: repeat new timer for $minutesToRepeat"
       state.doorAlarmTime = now() + minutesToRepeat * 60 * 1000
     }
   }
@@ -177,14 +177,14 @@ def doorAlarm() {
 
 private send(message) {
   if (state.snoozeMinutes != null && state.snoozeMinutes > 0) {
-    log.info("ODA: ===> Notification SKIPPED! $message")
+    if (debugLog) log.debug("ODA: Notification SKIPPED! $message")
   } else {
     alarmLights.each {
       it.on() 
     }
 
     if (sendPushMessage != null) {
-      log.info("ODA: ===> Send Notification: $message")
+      if (debugLog) log.debug("ODA: Send Notification: $message")
       sendPushMessage.deviceNotification(message)
     } 
   }
