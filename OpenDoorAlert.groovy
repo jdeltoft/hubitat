@@ -151,7 +151,7 @@ def handleDoorEvent() {
       }
 
       if (debugLog) log.debug "ODA: new timer for $min"
-      state.doorAlarmTime = now() + minutesToAlertDay * 60 * 1000
+      state.doorAlarmTime = now() + min * 60 * 1000
       runIn(60 * 5, timerHandler)
     }
   } else { 
