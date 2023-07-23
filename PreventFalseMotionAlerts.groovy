@@ -48,24 +48,30 @@ def initialize() {
   state.activationWindowTimeout = 0
 
   def multipleMotionDev = getChildDevice("PreventFalseMotionAlerts_${app.id}")
-  if(!multipeMotionDev) multipeMotionDev = addChildDevice("hubitat", "Virtual Contact Sensor", "PreventFalseMotionAlerts_${app.id}", null, [label: thisName, name: thisName])
+  if(!multipleMotionDev) multipleMotionDev = addChildDevice("hubitat", "Virtual Contact Sensor", "PreventFalseMotionAlerts_${app.id}", null, [label: thisName, name: thisName])
+  multipleMotionDev.close()
 
-  handleMotionEvent()  // need to check for motion at start up also
+  if (debugLog) log.debug "PFMA: ---------------------------------------"
+
+  ////////handleMotionEvent()  // need to check for motion at start up also
 
   subscribe(motionSensors, "motion", handlerMotion)
 }
 
 def handlerMotion(evt) {
-  if (debugLog) log.debug "PFMA: motion event $evt.device $evt.value"
-  handleMotionEvent(evt.device)
+  //if (debugLog) log.debug "PFMA: motion event $evt.device $evt.value"
+
+  if (evt.value == "active") {
+    handleMotionEvent(evt)
+  }
 }
 
-def handleMotionEvent(dev) {
+def handleMotionEvent(evt) {
   def multipeMotionDev = getChildDevice("PreventFalseMotionAlerts_${app.id}")
 
   // check if we're already activated for multiple motion
   if(state.activityTimeout != 0) {
-    if (debugLog) log.debug "PFMA: motion event when triggered"
+    if (debugLog) log.debug "PFMA: motion when active : ${evt.device}"
 
     // set flag for any motion in triggered state
     multipeMotionDev.open()
@@ -76,7 +82,7 @@ def handleMotionEvent(dev) {
     // set timer to check if timeout passed
     runIn(60 * activityTimeoutMinutes, timerHandler)
   } else if ((state.activationWindowTimeout != 0) && (now() <= state.activationWindowTimeout)){ 
-    if (debugLog) log.debug "PFMA: additional motion event occured during activation window"
+    if (debugLog) log.debug "PFMA: motion during activation window : ${evt.device}"
 
     // set "flag" that multiple motion events seen during activity window
     multipeMotionDev.open()
@@ -90,7 +96,7 @@ def handleMotionEvent(dev) {
     // set timer to check if timeout passed
     runIn(60 * activityTimeoutMinutes, timerHandler)
   } else {
-    if (debugLog) log.debug "PFMA: additional motion event occured during activation window"
+    if (debugLog && evt != null) log.debug "PFMA: motion to enter activation window : ${evt.device}"
 
     state.activationWindowTimeout = now() + (activationWindowMinutes * 60 * 1000)
 
