@@ -12,9 +12,9 @@ preferences {
 }
 
 def mainPage() {
-  dynamicPage(name: "mainPage", title: "Prevent False Motion Alerts (ver:0.10)", install: true, uninstall: true) {
+  dynamicPage(name: "mainPage", title: "Prevent False Motion Alerts (ver:0.13)", install: true, uninstall: true) {
     section {
-      input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Prevent False Motion Alerts (NameMe)"
+      input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Prevent False Motion Alerts"
       if(thisName) app.updateLabel("$thisName")
 
       input "motionSensors", "capability.motionSensor", title: "Select Motion Sensors", submitOnChange: true, required: true, multiple: true
@@ -52,9 +52,6 @@ def initialize() {
   multipleMotionDev.close()
 
   if (debugLog) log.debug "PFMA: ---------------------------------------"
-
-  ////////handleMotionEvent()  // need to check for motion at start up also
-
   subscribe(motionSensors, "motion", handlerMotion)
 }
 
@@ -67,25 +64,25 @@ def handlerMotion(evt) {
 }
 
 def handleMotionEvent(evt) {
-  def multipeMotionDev = getChildDevice("PreventFalseMotionAlerts_${app.id}")
+  def multipleMotionDev = getChildDevice("PreventFalseMotionAlerts_${app.id}")
 
   // check if we're already activated for multiple motion
   if(state.activityTimeout != 0) {
     if (debugLog) log.debug "PFMA: motion when active : ${evt.device}"
 
     // set flag for any motion in triggered state
-    multipeMotionDev.open()
+    multipleMotionDev.open()
 
     // reset the timeout
     state.activityTimeout = now() + (activityTimeoutMinutes * 60 * 1000)
 
-    // set timer to check if timeout passed
+    // set timer to check if activity timeout passed
     runIn(60 * activityTimeoutMinutes, timerHandler)
   } else if ((state.activationWindowTimeout != 0) && (now() <= state.activationWindowTimeout)){ 
     if (debugLog) log.debug "PFMA: motion during activation window : ${evt.device}"
 
     // set "flag" that multiple motion events seen during activity window
-    multipeMotionDev.open()
+    multipleMotionDev.open()
 
     // reset activation window now that we're activated
     state.activationWindowTimeout = 0
@@ -101,11 +98,13 @@ def handleMotionEvent(evt) {
     state.activationWindowTimeout = now() + (activationWindowMinutes * 60 * 1000)
 
     // close the flag (should be already) since we weren't already triggered
-    multipeMotionDev.close()
+    multipleMotionDev.close()
   }
 }
 
 def timerHandler() {
+  def multipleMotionDev = getChildDevice("PreventFalseMotionAlerts_${app.id}")
+
   if (state.activityTimeout != 0) {
     if (debugLog) log.debug "PFMA: timer handler (activity timeout)"
 
@@ -113,7 +112,7 @@ def timerHandler() {
       if (debugLog) log.debug "PFMA: activity timed out"
       state.activityTimeout = 0
       state.activationWindowTimeout = 0
-      multipeMotionDev.close()
+      multipleMotionDev.close()
     }
   } else if (state.activationWindowTimeout != 0) {
     if (debugLog) log.debug "PFMA: timer handler (activation window timeout)"
@@ -122,12 +121,12 @@ def timerHandler() {
       if (debugLog) log.debug "PFMA: activation window timed out"
       state.activityTimeout = 0
       state.activationWindowTimeout = 0
-      multipeMotionDev.close()
+      multipleMotionDev.close()
     }
   } else {
       // all zero, set "flag" closed just in case
       if (debugLog) log.debug "PFMA: timer event with no timeouts"
-      multipeMotionDev.close()
+      multipleMotionDev.close()
   }
 }
 
