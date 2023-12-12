@@ -75,16 +75,22 @@ def isThereLowBattery(evt, sensors) {
 
 	//contactSensors.each {
 	sensors.each {
-    if (it.currentBattery < 90) {
-      if (debugLog) log.debug "LowBatt: battery event $evt.device $evt.value"
-	    foundLow = true
+    if (it.currentBattery <= lowBatteryThreshold) {
+      if ($it.id == 757) {
+        // TODO: bad device that won't go above 66 % battery ???
+        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device at $it.currentValue"
+      } else {
+        if (debugLog) log.debug "LowBatt: battery for $it.device at $it.currentValue"
+	      foundLow = true
+      }
     }
 	}
-  return foundlow
+  if (debugLog) log.debug "LowBatt: battery foundLow $foundLow"
+  return foundLow
 }
 
 def handlerContactBattery(evt) {
-  if (debugLog) log.debug "LowBatt: contact battery event $evt.device $evt.value"
+  //if (debugLog) log.debug "LowBatt: contact battery event $evt.device $evt.value"
 
   def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, contactSensors) == true) {
@@ -110,7 +116,7 @@ def handlerContactBattery(evt) {
 }
 
 def handlerMotionBattery(evt) {
-  if (debugLog) log.debug "LowBatt: motion battery event $evt.device $evt.value"
+  //if (debugLog) log.debug "LowBatt: motion battery event $evt.device $evt.value"
 
   def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, motionSensors) == true) {
@@ -136,7 +142,7 @@ def handlerMotionBattery(evt) {
 }
 
 def handlerWaterBattery(evt) {
-  if (debugLog) log.debug "LowBatt: water battery event $evt.device $evt.value"
+  //if (debugLog) log.debug "LowBatt: water battery event $evt.device $evt.value"
 
   def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, waterSensors) == true) {
@@ -162,7 +168,7 @@ def handlerWaterBattery(evt) {
 }
 
 def handlerSmokeBattery(evt) {
-  if (debugLog) log.debug "LowBatt: smoke batter event $evt.device $evt.value"
+  //if (debugLog) log.debug "LowBatt: smoke batter event $evt.device $evt.value"
 
   def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, smokeSensors) == true) {
