@@ -1,3 +1,5 @@
+import org.apache.commons.lang3.time.DateUtils
+
 definition(
   name: "Low Battery or Old Activity Alert",
   namespace: "hubitat",
@@ -10,6 +12,10 @@ definition(
 preferences {
   page(name: "mainPage")
 }
+
+// TODO:
+// - add device to alert message
+// - add check for stale comms
 
 def mainPage() {
   dynamicPage(name: "mainPage", title: "Low Battery or Old Activity Alert (ver:0.11)", install: true, uninstall: true) {
@@ -24,10 +30,6 @@ def mainPage() {
       input "alertMessage", "text", title: "Alert Message", defaultValue: "LowBatt Alert!", required: true 
       input "lowBatteryThreshold", "number", title: "Low Battery Percent (0-100):", defaultValue: 60, submitOnChange: true
       input "oldActivityThreshold", "number", title: "Old Activity Days:", defaultValue: 3, submitOnChange: true
-      input "repeat", "bool", title: "repeat:", defaultValue: false, submitOnChange: true
-      if (repeat) {
-          input "minutesToRepeat", "number", title: "Repeat Alerts Time (minutes):", defaultValue: 30, submitOnChange: true
-      }
     }
 
     section("Notifications") {
@@ -56,48 +58,50 @@ def uninstalled() {
 def initialize() {
   state.alarmTriggerTimestamp = 0
 
-  def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
-  if(!outletDevice) outletDevice = addChildDevice("hubitat", "Virtual Contact Sensor", "LowBatteryOldActivityAlert_${app.id}", null, [label: thisName, name: thisName])
-
-  //handleOutletEvent()  // need to check at start up also
-
   subscribe(contactSensors, "battery", handlerContactBattery)
   subscribe(motionSensors, "battery", handlerMotionBattery)
   subscribe(waterSensors, "battery", handlerWaterBattery)
   subscribe(smokSensors, "battery", handlerSmokeBattery)
 
-  log.debug "LowBatt: installation initialize..."
+  // LOGGING INFO HELP
+	smokeSensors.each { 
+    //if (debugLog) log.debug "LowBatt: $it.device.properties"
+
+    // lastActivityTime "Tue Dec 12 07:15:26 CST 2023"
+    // it.device.lastActivityTime.getTime()
+
+    //def x = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
+    //log.debug "LowBatt: $x $it.device.name"
+  }
+
+  log.debug "LowBatt: installation initialize... $n"
 }
 
 def isThereLowBattery(evt, sensors) {
-
 	def foundLow = false
-
-	//contactSensors.each {
 	sensors.each {
     if (it.currentBattery <= lowBatteryThreshold) {
-      if ($it.id == 757) {
+      if (it.device.id == 757) {
         // TODO: bad device that won't go above 66 % battery ???
-        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device at $it.currentValue"
+        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device"
       } else {
-        if (debugLog) log.debug "LowBatt: battery for $it.device at $it.currentValue"
+        if (debugLog) log.debug "LowBatt: battery for $it.device"
 	      foundLow = true
       }
     }
+
+    // Also check if the lastActivityTime was older than oldActivityThreshold days
+    def staleDays = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
+    if (staleDays >= oldActivityThreshold) {
+      if (debugLog) log.debug "LowBatt: comms for $it.device ($staleDays days)"
+	    foundLow = true
+    }
 	}
-  if (debugLog) log.debug "LowBatt: battery foundLow $foundLow"
   return foundLow
 }
 
 def handlerContactBattery(evt) {
-  //if (debugLog) log.debug "LowBatt: contact battery event $evt.device $evt.value"
-
-  def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, contactSensors) == true) {
-    // show that outlet is off in the virtual device
-    outletDevice.open()
-
-    // if outlet is off start a timer for minutesToAlertDay unless already running
     if (state.alarmTriggerTimestamp == 0) {
       def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
       Date latestdate = new Date();
@@ -107,23 +111,13 @@ def handlerContactBattery(evt) {
       triggerAlarm()
     }
   } else { 
-    // show that outlet is on in the virtual device
-    outletDevice.close()
-
     // if outlet is on, set to zero to indicate no timer
     state.alarmTriggerTimestamp = 0
   }
 }
 
 def handlerMotionBattery(evt) {
-  //if (debugLog) log.debug "LowBatt: motion battery event $evt.device $evt.value"
-
-  def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, motionSensors) == true) {
-    // show that outlet is off in the virtual device
-    outletDevice.open()
-
-    // if outlet is off start a timer for minutesToAlertDay unless already running
     if (state.alarmTriggerTimestamp == 0) {
       def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
       Date latestdate = new Date();
@@ -133,23 +127,13 @@ def handlerMotionBattery(evt) {
       triggerAlarm()
     }
   } else { 
-    // show that outlet is on in the virtual device
-    outletDevice.close()
-
     // if outlet is on, set to zero to indicate no timer
     state.alarmTriggerTimestamp = 0
   }
 }
 
 def handlerWaterBattery(evt) {
-  //if (debugLog) log.debug "LowBatt: water battery event $evt.device $evt.value"
-
-  def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, waterSensors) == true) {
-    // show that outlet is off in the virtual device
-    outletDevice.open()
-
-    // if outlet is off start a timer for minutesToAlertDay unless already running
     if (state.alarmTriggerTimestamp == 0) {
       def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
       Date latestdate = new Date();
@@ -159,23 +143,13 @@ def handlerWaterBattery(evt) {
       triggerAlarm()
     }
   } else { 
-    // show that outlet is on in the virtual device
-    outletDevice.close()
-
     // if outlet is on, set to zero to indicate no timer
     state.alarmTriggerTimestamp = 0
   }
 }
 
 def handlerSmokeBattery(evt) {
-  //if (debugLog) log.debug "LowBatt: smoke batter event $evt.device $evt.value"
-
-  def outletDevice = getChildDevice("LowBatteryOldActivityAlert_${app.id}")
   if(isThereLowBattery(evt, smokeSensors) == true) {
-    // show that outlet is off in the virtual device
-    outletDevice.open()
-
-    // if outlet is off start a timer for minutesToAlertDay unless already running
     if (state.alarmTriggerTimestamp == 0) {
       def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
       Date latestdate = new Date();
@@ -185,25 +159,8 @@ def handlerSmokeBattery(evt) {
       triggerAlarm()
     }
   } else { 
-    // show that outlet is on in the virtual device
-    outletDevice.close()
-
     // if outlet is on, set to zero to indicate no timer
     state.alarmTriggerTimestamp = 0
-  }
-}
-
-def timerHandler(fromInput) {
-  if (state.alarmTriggerTimestamp == null) state.alarmTriggerTimestamp = 0
-
-  // Check if alarm timer is active
-  if (state.alarmTriggerTimestamp > 0 && (state.alarmTriggerTimestamp < now())) {
-    triggerAlarm()
-  }
-
-  if (state.alarmTriggerTimestamp > 0) {
-    if (debugLog) log.debug "LowBatt: timer set timeout alarm:${state.alarmTriggerTimestamp}"
-    runIn(60 * 5, timerHandler)
   }
 }
 
@@ -211,11 +168,6 @@ def triggerAlarm() {
   if (state.alarmTriggerTimestamp > 0) {
     state.alarmTriggerTimestamp = 0
     send(alertMessage)
-
-    if (repeat) {
-      log.info("LowBatt: repeat new timer for $minutesToRepeat")
-      state.alarmTriggerTimestamp = now() + minutesToRepeat * 60 * 1000
-    }
   }
 }
 
@@ -229,3 +181,4 @@ private send(message) {
     sendPushMessage.deviceNotification(message)
   } 
 }
+
