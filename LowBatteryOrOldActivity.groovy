@@ -71,33 +71,32 @@ def initialize() {
     // it.device.lastActivityTime.getTime()
 
     //def x = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
-    //log.debug "LowBatt: $x $it.device.name"
+    //log.debug "LowBatt: $x $it.device.label"
   }
 
-  log.debug "LowBatt: installation initialize... $n"
+  log.debug "LowBatt: installation initialized... $n"
 }
 
 def isThereLowBattery(evt, sensors) {
-	def foundLow = false
+	def foundLowOrStale = false
 	sensors.each {
     if (it.currentBattery <= lowBatteryThreshold) {
       if (it.device.id == 757) {
         // TODO: bad device that won't go above 66 % battery ???
         if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device"
       } else {
-        if (debugLog) log.debug "LowBatt: battery for $it.device"
-	      foundLow = true
+        if (debugLog) log.debug "LowBatt: battery for $it.device.label ($it.currentBattery)"
+	      foundLowOrStale = true
       }
     }
 
-    // Also check if the lastActivityTime was older than oldActivityThreshold days
-    def staleDays = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
-    if (staleDays >= oldActivityThreshold) {
-      if (debugLog) log.debug "LowBatt: comms for $it.device ($staleDays days)"
-	    foundLow = true
+    def deviceStaleDays = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
+    if (deviceStaleDays >= oldActivityThreshold) {
+      if (debugLog) log.debug "LowBatt: comms for $it.device.label ($deviceStaleDays days)"
+	    foundLowOrStale = true
     }
 	}
-  return foundLow
+  return foundLowOrStale
 }
 
 def handlerContactBattery(evt) {
