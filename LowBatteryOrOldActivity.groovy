@@ -1,4 +1,5 @@
-import org.apache.commons.lang3.time.DateUtils
+//import org.apache.commons.lang3.time.DateUtils
+import java.text.SimpleDateFormat 
 
 definition(
   name: "Low Battery or Old Activity Alert",
@@ -15,10 +16,10 @@ preferences {
 
 // TODO:
 // - add device to alert message
-// - add check for stale comms
+// - add setting for night hours
 
 def mainPage() {
-  dynamicPage(name: "mainPage", title: "Low Battery or Old Activity Alert (ver:0.11)", install: true, uninstall: true) {
+  dynamicPage(name: "mainPage", title: "Low Battery or Old Activity Alert (ver:0.12)", install: true, uninstall: true) {
     section {
       input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Battery/Activity Alert (NameMe)"
       if(thisName) app.updateLabel("$thisName")
@@ -30,6 +31,8 @@ def mainPage() {
       input "alertMessage", "text", title: "Alert Message", defaultValue: "LowBatt Alert!", required: true 
       input "lowBatteryThreshold", "number", title: "Low Battery Percent (0-100):", defaultValue: 60, submitOnChange: true
       input "oldActivityThreshold", "number", title: "Old Activity Days:", defaultValue: 3, submitOnChange: true
+      input "minHoursBetweenAlerts", "number", title: "Minimum Hours Between Alerts:", defaultValue: 24, submitOnChange: true
+      input "avoidNightAlerts", "bool", title: "Prevent Alerts at Night", defaultValue: true, submitOnChange: true
     }
 
     section("Notifications") {
@@ -55,6 +58,11 @@ def uninstalled() {
   deleteChildDevice("LowBatteryOldActivityAlert_${app.id}")
 }
 
+def getHour() {
+	def cal = Calendar.getInstance()
+	return cal[Calendar.HOUR_OF_DAY]
+}
+
 def initialize() {
   state.alarmTriggerTimestamp = 0
 
@@ -63,18 +71,13 @@ def initialize() {
   subscribe(waterSensors, "battery", handlerWaterBattery)
   subscribe(smokSensors, "battery", handlerSmokeBattery)
 
-  // LOGGING INFO HELP
-	smokeSensors.each { 
-    //if (debugLog) log.debug "LowBatt: $it.device.properties"
-
-    // lastActivityTime "Tue Dec 12 07:15:26 CST 2023"
-    // it.device.lastActivityTime.getTime()
-
-    //def x = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
-    //log.debug "LowBatt: $x $it.device.label"
+  if (avoidNightAlerts == true) {
+    if (getHour() > 20 || getHour() < 11) {
+      log.debug "got here ${getHour()}"
+    }
   }
 
-  log.debug "LowBatt: installation initialized... $n"
+  log.debug "LowBatt: installation initialized..."
 }
 
 def isThereLowBattery(evt, sensors) {
@@ -83,7 +86,7 @@ def isThereLowBattery(evt, sensors) {
     if (it.currentBattery <= lowBatteryThreshold) {
       if (it.device.id == 757) {
         // TODO: bad device that won't go above 66 % battery ???
-        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device"
+        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device ($it.currentBattery)"
       } else {
         if (debugLog) log.debug "LowBatt: battery for $it.device.label ($it.currentBattery)"
 	      foundLowOrStale = true
@@ -164,6 +167,12 @@ def handlerSmokeBattery(evt) {
 }
 
 def triggerAlarm() {
+  if (avoidNightAlerts == true) {
+    if (getHour() > 20 || getHour() < 7) {
+      return
+    }
+  }
+
   if (state.alarmTriggerTimestamp > 0) {
     state.alarmTriggerTimestamp = 0
     send(alertMessage)
