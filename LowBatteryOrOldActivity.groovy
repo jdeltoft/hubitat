@@ -91,7 +91,7 @@ def isBatteryLowOrCommunicationStale(evt, sensors) {
     if (it.currentBattery <= lowBatteryThreshold) {
       if (it.device.id == 757) {
         // TODO: bad device that won't go above 66 % battery ???
-        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device ($it.currentBattery)"
+        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device.label ($it.currentBattery)"
       } else {
         if (debugLog) log.debug "LowBatt: battery for $it.device.label ($it.currentBattery)"
 	      foundLowOrStale = true
@@ -131,6 +131,7 @@ def triggerAlarm() {
   if (avoidNightAlerts == true) {
     // TODO: make these hours settable in UI
     if (getHour() > 20 || getHour() < 7) {
+      if (debugLog) log.debug "LowBatt: waiting till daytime for alarm..."
       return
     }
   }
