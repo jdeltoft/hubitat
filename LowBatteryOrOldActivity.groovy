@@ -63,24 +63,29 @@ def getHour() {
 	return cal[Calendar.HOUR_OF_DAY]
 }
 
-def initialize() {
-  state.alarmTriggerTimestamp = 0
-
-  subscribe(contactSensors, "battery", handlerContactBattery)
-  subscribe(motionSensors, "battery", handlerMotionBattery)
-  subscribe(waterSensors, "battery", handlerWaterBattery)
-  subscribe(smokSensors, "battery", handlerSmokeBattery)
-
-  if (avoidNightAlerts == true) {
-    if (getHour() > 20 || getHour() < 11) {
-      log.debug "got here ${getHour()}"
-    }
+def lastAlarmTooRecent() {
+  if (state.lastAlarmTimestamp == 0) {
+    return false
+  } else if ((now() - state.lastAlarmTimestamp) < (minHoursBetweenAlerts * 60 * 60 * 1000)) {
+    if (debugLog) log.debug "LowBatt: last alarm too recent (now:${now()}  last:{$state.lastAlarmTimestamp})"
+    return true
+  } else {
+    return false
   }
+}
+
+def initialize() {
+  state.lastAlarmTimestamp = 0
+
+  subscribe(contactSensors, "battery", handlerBatteryEvent)
+  subscribe(motionSensors, "battery", handlerBatteryEvent)
+  subscribe(waterSensors, "battery", handlerBatteryEvent)
+  subscribe(smokSensors, "battery", handlerBatteryEvent)
 
   log.debug "LowBatt: installation initialized..."
 }
 
-def isThereLowBattery(evt, sensors) {
+def isBatteryLowOrCommunicationStale(evt, sensors) {
 	def foundLowOrStale = false
 	sensors.each {
     if (it.currentBattery <= lowBatteryThreshold) {
@@ -93,7 +98,9 @@ def isThereLowBattery(evt, sensors) {
       }
     }
 
+    // times are is in msec
     def deviceStaleDays = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
+
     if (deviceStaleDays >= oldActivityThreshold) {
       if (debugLog) log.debug "LowBatt: comms for $it.device.label ($deviceStaleDays days)"
 	    foundLowOrStale = true
@@ -102,81 +109,34 @@ def isThereLowBattery(evt, sensors) {
   return foundLowOrStale
 }
 
-def handlerContactBattery(evt) {
-  if(isThereLowBattery(evt, contactSensors) == true) {
-    if (state.alarmTriggerTimestamp == 0) {
-      def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
-      Date latestdate = new Date();
-
-      if (debugLog) log.debug "LowBatt: sending alarm.."
-      state.alarmTriggerTimestamp = now()
-      triggerAlarm()
-    }
-  } else { 
-    // if outlet is on, set to zero to indicate no timer
-    state.alarmTriggerTimestamp = 0
+def handlerBatteryEvent(evt) {
+  if (lastAlarmTooRecent() == true) {
+    return
   }
-}
 
-def handlerMotionBattery(evt) {
-  if(isThereLowBattery(evt, motionSensors) == true) {
-    if (state.alarmTriggerTimestamp == 0) {
-      def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
-      Date latestdate = new Date();
-
-      if (debugLog) log.debug "LowBatt: sending alarm.."
-      state.alarmTriggerTimestamp = now()
-      triggerAlarm()
-    }
-  } else { 
-    // if outlet is on, set to zero to indicate no timer
-    state.alarmTriggerTimestamp = 0
-  }
-}
-
-def handlerWaterBattery(evt) {
-  if(isThereLowBattery(evt, waterSensors) == true) {
-    if (state.alarmTriggerTimestamp == 0) {
-      def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
-      Date latestdate = new Date();
-
-      if (debugLog) log.debug "LowBatt: sending alarm.."
-      state.alarmTriggerTimestamp = now()
-      triggerAlarm()
-    }
-  } else { 
-    // if outlet is on, set to zero to indicate no timer
-    state.alarmTriggerTimestamp = 0
-  }
-}
-
-def handlerSmokeBattery(evt) {
-  if(isThereLowBattery(evt, smokeSensors) == true) {
-    if (state.alarmTriggerTimestamp == 0) {
-      def astroInfo = getSunriseAndSunset(sunsetOffset: sunsetOffset)
-      Date latestdate = new Date();
-
-      if (debugLog) log.debug "LowBatt: sending alarm.."
-      state.alarmTriggerTimestamp = now()
-      triggerAlarm()
-    }
-  } else { 
-    // if outlet is on, set to zero to indicate no timer
-    state.alarmTriggerTimestamp = 0
+  if(isBatteryLowOrCommunicationStale(evt, contactSensors) == true) {
+    triggerAlarm()
+  } else if(isBatteryLowOrCommunicationStale(evt, motionSensors) == true) {
+    triggerAlarm()
+  } else if(isBatteryLowOrCommunicationStale(evt, waterSensors) == true) {
+    triggerAlarm()
+  } else if(isBatteryLowOrCommunicationStale(evt, smokeSensors) == true) {
+    triggerAlarm()
   }
 }
 
 def triggerAlarm() {
+  if (debugLog) log.debug "LowBatt: alarm triggered ..."
+
   if (avoidNightAlerts == true) {
+    // TODO: make these hours settable in UI
     if (getHour() > 20 || getHour() < 7) {
       return
     }
   }
 
-  if (state.alarmTriggerTimestamp > 0) {
-    state.alarmTriggerTimestamp = 0
-    send(alertMessage)
-  }
+  state.lastAlarmTimestamp = now()
+  send(alertMessage)
 }
 
 private send(message) {
