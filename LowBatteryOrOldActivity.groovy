@@ -15,11 +15,13 @@ preferences {
 }
 
 // TODO:
-// - add device to alert message
+// - need alert to share device details
 // - add setting for night hours
+// - auto trigger a refresh of device if stale comms, before reporting alert (smoke detector worked for example)
+// - 
 
 def mainPage() {
-  dynamicPage(name: "mainPage", title: "Low Battery or Old Activity Alert (ver:0.12)", install: true, uninstall: true) {
+  dynamicPage(name: "mainPage", title: "Low Battery or Old Activity Alert (ver:0.13)", install: true, uninstall: true) {
     section {
       input "thisName", "text", title: "Name this Alert", submitOnChange: true, defaultValue: "Battery/Activity Alert (NameMe)"
       if(thisName) app.updateLabel("$thisName")
@@ -67,7 +69,7 @@ def lastAlarmTooRecent() {
   if (state.lastAlarmTimestamp == 0) {
     return false
   } else if ((now() - state.lastAlarmTimestamp) < (minHoursBetweenAlerts * 60 * 60 * 1000)) {
-    if (debugLog) log.debug "LowBatt: last alarm too recent (now:${now()}  last:{$state.lastAlarmTimestamp})"
+    //if (debugLog) log.debug "LowBatt: last alarm too recent (now:${now()}  last:{$state.lastAlarmTimestamp})"
     return true
   } else {
     return false
@@ -86,15 +88,15 @@ def initialize() {
 }
 
 def isBatteryLowOrCommunicationStale(evt, sensors) {
-	def foundLowOrStale = false
+	def foundLowOrStale = ""
 	sensors.each {
     if (it.currentBattery <= lowBatteryThreshold) {
       if (it.device.id == 757) {
         // TODO: bad device that won't go above 66 % battery ???
-        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device.label ($it.currentBattery)"
+        if (debugLog) log.debug "LowBatt: IGNORING!! battery for $it.device.label ($it.currentBattery%)"
       } else {
-        if (debugLog) log.debug "LowBatt: battery for $it.device.label ($it.currentBattery)"
-	      foundLowOrStale = true
+        if (debugLog) log.debug "LowBatt: found low battery for $it.device.label ($it.currentBattery%)"
+	      foundLowOrStale = "Batt:" + foundLowOrStale + it.device.label + ", "
       }
     }
 
@@ -102,8 +104,8 @@ def isBatteryLowOrCommunicationStale(evt, sensors) {
     def deviceStaleDays = (Math.floor((now() - it.device.lastActivityTime.getTime()) / (864 * Math.pow(10,5)))).toInteger()
 
     if (deviceStaleDays >= oldActivityThreshold) {
-      if (debugLog) log.debug "LowBatt: comms for $it.device.label ($deviceStaleDays days)"
-	    foundLowOrStale = true
+      if (debugLog) log.debug "LowBatt: found stale comms for $it.device.label ($deviceStaleDays days)"
+	    foundLowOrStale = "Comm:" + foundLowOrStale + it.device.label + ", "
     }
 	}
   return foundLowOrStale
@@ -114,30 +116,31 @@ def handlerBatteryEvent(evt) {
     return
   }
 
-  if(isBatteryLowOrCommunicationStale(evt, contactSensors) == true) {
-    triggerAlarm()
-  } else if(isBatteryLowOrCommunicationStale(evt, motionSensors) == true) {
-    triggerAlarm()
-  } else if(isBatteryLowOrCommunicationStale(evt, waterSensors) == true) {
-    triggerAlarm()
-  } else if(isBatteryLowOrCommunicationStale(evt, smokeSensors) == true) {
-    triggerAlarm()
+  def totalErrorMessage = ""
+
+  totalErrorMessage = totalErrorMessage + isBatteryLowOrCommunicationStale(evt, contactSensors)
+  totalErrorMessage = totalErrorMessage + isBatteryLowOrCommunicationStale(evt, motionSensors)
+  totalErrorMessage = totalErrorMessage + isBatteryLowOrCommunicationStale(evt, waterSensors)
+  totalErrorMessage = totalErrorMessage + isBatteryLowOrCommunicationStale(evt, smokeSensors)
+
+  if (totalErrorMessage != "") {
+    triggerAlarm(totalErrorMessage)
   }
 }
 
-def triggerAlarm() {
-  if (debugLog) log.debug "LowBatt: alarm triggered ..."
-
+def triggerAlarm(errorMessage) {
   if (avoidNightAlerts == true) {
     // TODO: make these hours settable in UI
     if (getHour() > 20 || getHour() < 7) {
-      if (debugLog) log.debug "LowBatt: waiting till daytime for alarm..."
+      //if (debugLog) log.debug "LowBatt: waiting till daytime for alarm..."
       return
     }
   }
 
+  if (debugLog) log.debug "LowBatt: alarm triggered ..."
+
   state.lastAlarmTimestamp = now()
-  send(alertMessage)
+  send(alertMessage + " :: " + errorMessage)
 }
 
 private send(message) {
